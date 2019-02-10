@@ -1,4 +1,4 @@
-Wisteria GistNoesis : music tutor using Tensorflow.js
+#Wisteria GistNoesis : music tutor using Tensorflow.js
 
 Wisteria website : https://gistnoesis.github.io/
 
@@ -12,7 +12,7 @@ It's just been created so wait a week for it to get cleaner.
 
 You will learn to generate synthetic datasets, train the models, export them for use inside a browser.
 
-Requirements : 
+##Requirements : 
 -Ubuntu (other OS will need some adaptation)
 -ffmpeg
 -fluidsynth
@@ -20,7 +20,7 @@ Requirements :
 Noise downloaded from https://people.xiph.org/~jm/demo/rnnoise/
 
 
-Installation :
+##Installation :
 
 One virtual env for learning. (Install the needed pip dependencies listed in the file, depending on your machine choose either tensorflow or tensorflow-gpu)
 
@@ -34,7 +34,7 @@ Generate some ssl certificate (cert.pem and key.pem) using openssl.
 
 (If you want webpack-dev server, you will have to edit the variable host inside index.js to serve the model using an external webserver like http-server -S -p 3000 --cors -C ../cert.pem -K ../key.pem 
 
-Usage : 
+##Usage : 
 Edit the configs as desired then call from the right virtual env
 
 To generate the dataset and learn the network :
@@ -44,7 +44,7 @@ To export the model :
 python3 musicTranscriptor.py -ds pianoAllMonophonic10000.datasetconfig -mod conv1.modelconfig -tr robust.trainingconfig -act e
 
 
-Some Technical details to consider when designing your networks : 
+##Some Technical details to consider when designing your networks : 
 We are doing some real-time processing therefore it imposes restriction on the keras layers you can use so that everything works well.
 
 When doing filtering (i.e. using only data from the past) and not smoothing (waiting to have more data from the future before making a prediction), you can't use "SAME" or "VALID" convolutions if they have a kernel size greater than 1. You must use "CAUSAL" convolutions. You can use recurrent layers. You can't use normalization layers like BatchNorm or InstanceNorm, so I recommend using selu as a substitute.
@@ -61,3 +61,4 @@ You can quite easily build some nice audio application following this project.
 
 I recommend working with librispeech dataset and CTC loss for speech recognition, if you want to replicate deepspeech.
 
+Have fun ;)
