@@ -13,9 +13,11 @@ It's just been created so wait a week for it to get cleaner.
 You will learn to generate synthetic datasets, train the models, export them for use inside a browser.
 
 ## Requirements : 
--Ubuntu (other OS will need some adaptation)
--ffmpeg
--fluidsynth
+- Ubuntu (other OS will need some adaptation)
+
+- ffmpeg
+
+- fluidsynth
 
 Noise downloaded from https://people.xiph.org/~jm/demo/rnnoise/
 
