@@ -1,0 +1,6 @@
+{
+  "architecture": "conv1",
+  "depth": 5,
+  "layerSize": 200,
+  "outputNameSuffix": ""
+}

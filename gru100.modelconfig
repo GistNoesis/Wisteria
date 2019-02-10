@@ -1,0 +1,6 @@
+{
+  "architecture": "GRU",
+  "depth": 3,
+  "layerSize": 100,
+  "outputNameSuffix": ""
+}

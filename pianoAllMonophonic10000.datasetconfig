@@ -1,0 +1,7 @@
+{
+  "name": "randomMonophonic",
+  "type": "train",
+  "nbex": 10000,
+  "instruments":[0,1,2,3,4,5,6,7],
+  "outputNameSuffix": "AllPianos"
+}
