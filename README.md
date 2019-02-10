@@ -19,7 +19,7 @@ You will learn to generate synthetic datasets, train the models, export them for
 
 - fluidsynth
 
-Noise downloaded from https://people.xiph.org/~jm/demo/rnnoise/
+- Noise downloaded from https://people.xiph.org/~jm/demo/rnnoise/
 
 
 ## Installation :
