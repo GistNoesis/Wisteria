@@ -43,7 +43,7 @@ function startListening() {
     f.gain.value = 0;
     filters.push(f);
   }
-
+ 
   source.connect(filters[0]);
   for (var i = 0; i < nbfilter - 1; i++) {
     filters[i].connect(filters[i + 1]);
@@ -55,8 +55,11 @@ function startListening() {
   downsampler.connect(context.destination);
 
   //document.getElementById("output").innerText += downsampler;
+  var co = 0;
   downsampler.onaudioprocess = function (e) {
-    //document.getElementById("output").innerText += "onaudioProcess";
+    
+    //document.getElementById("output3").innerText = "onaudioProcess " + co;
+    co = co+1;
     // Do something with the data, i.e Convert this to WAV
     var data = e.inputBuffer.getChannelData(0).slice();
     allAudioRaw.push(data);
@@ -70,13 +73,16 @@ function startListening() {
 
 }
 
-document.getElementById("start").onclick = startListening;
+
 
 var handleSuccess = function (stream) {
   //document.getElementById("output").innerText += "handleSuccess";
   globalStream = stream;
 
 };
+
+
+
 
 Math.clip = function (number, min, max) {
   return Math.max(min, Math.min(number, max));
@@ -118,13 +124,17 @@ function addComputations() {
 
 
 var gpuLock = false;
-var queuesAndProcessor = [{ q: compqueue, p: computeSpectogram, skipifgreater: 150, minlength: 0 }, { q: prqueue, p: computePianoRoll, minlength: 0 }]
+var queuesAndProcessor = [{ q: compqueue, p: computeSpectogram, skipifgreater: 60, minlength: 0 }, { q: prqueue, p: computePianoRoll, minlength: 0 }]
+
 
 function computeLoop3() {
   if (gpuLock == true) {
     setTimeout(computeLoop3, 10);
     return;
   }
+
+  //setTimeout(computeLoop3, 10);
+  //return;
 
   var qp = null;
   var ql = -1;
@@ -171,9 +181,13 @@ function computeLoop3() {
 const initialStateVariable = tf.variable( tf.zeros([1,200]) );
 
 function computePianoRoll(indices) {
+  //return;
   //console.log("ComputePianoRoll : ");
   //console.log( indices );
-
+  if( prmodel == null)
+  {
+    return;
+  }
 
   var extraAudio = 0;
 
@@ -183,7 +197,7 @@ function computePianoRoll(indices) {
   for (var i = 0; i < extraAudio; i++) {
     var ind = indices[0] - extraAudio + i;
     if (ind >= 0) {
-      lastAudio.push(allSpecter[ind])
+      lastAudio.push(allSpecter[ind]);
     }
     else {
       lastAudio.push(new Array(513));
@@ -230,7 +244,7 @@ function computePianoRoll(indices) {
     //return greedy;
   });
 
-  gpuLock = true;
+  gpuLock = true;//true
 
   var allpromises = Promise.all( prfeats.map( x=>x.data()) );
   //prfeats.data()
@@ -287,7 +301,7 @@ function computeSpectogram(audioIndices) {
     return logfft;
   });
 
-  gpuLock = true;
+  gpuLock = true;//true
   logspecter.data().then(ls => {
     //console.log(ls);
     for (var i = 0; i < logspecter.shape[0]; i++) {
@@ -324,12 +338,18 @@ function computeSpectogram(audioIndices) {
 
 }
 
+var prmodel = null;
+
+function whenDocumentReady()
+{
+
+document.getElementById("start").onclick = startListening;
 
 var canvas = document.getElementById("mycanvas");
 var ctx = canvas.getContext("2d");
 
 var prcanvas = document.getElementById("pianoroll");
-export var prctx = prcanvas.getContext("2d");
+var prctx = prcanvas.getContext("2d");
 
 
 
@@ -432,19 +452,27 @@ var myview = new Vue({
 }
 });
 
-var prmodel = null;
+
 //randomMonophonic_train_10000
 //randomPolyphonic_train_10000
 
+var loadModelLock = false;
+
 function loadSelectedModel( modelname ) {
   console.log("loadSelectedModel");
-  
-  //var host = 'https://127.0.0.1:3000/';
+  if( loadModelLock == true)
+  {
+    return;
+  }
+  loadModelLock = true;
+  //var host = 'https://127.0.0.1:/';
   var host = "/";
 
   tf.loadModel(host+modelname+'/model.json').then(function (model) {
+    loadModelLock = false;
     console.log("Model loaded : "+ modelname)
-    console.log(model);
+    //console.log(model);
+    //document.getElementById("output").innerText="Model loaded";
     if ( prmodel != null)
     {
       prmodel.model.dispose();
@@ -471,7 +499,8 @@ function loadSelectedModel( modelname ) {
 
 }
 
-
+//document.getElementById("output").innerText="Starting model load";
 loadSelectedModel(uidata.modelname);
 
-
+}
+window.onload = whenDocumentReady;

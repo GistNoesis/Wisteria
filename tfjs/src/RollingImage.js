@@ -25,11 +25,17 @@ export class RollingImage {
     this.buffers = buffers;
     this.transfo = transfo;
     this.nbofimageToKeep = nbofimageToKeep;
+    this.co = 0;
   }
   draw() {
+    this.co ++;
+    
+
     var th = this;
     requestAnimationFrame(() => th.draw());
     var ind = this.buffers.length - 1;
+    //document.getElementById("output").innerText = ind;
+    //document.getElementById("output2").innerText = this.co;
     if (ind < 0)
       return;
     for (var jj = this.lastDrawn + 1; jj < this.buffers.length; jj++) {

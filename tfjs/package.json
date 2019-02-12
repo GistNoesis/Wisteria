@@ -2,7 +2,7 @@
   "name": "tfjs",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "index.js",
   "scripts": {
     "dev": "webpack-dev-server --https --cert cert.pem --key key.pem --mode development --progress --hot --open",
     "build": "webpack --mode production --progress"
