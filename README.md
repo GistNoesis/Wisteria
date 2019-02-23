@@ -12,6 +12,11 @@ It's just been created so wait a week for it to get cleaner.
 
 You will learn to generate synthetic datasets, train the models, export them for use inside a browser.
 
+## What's new : 
+- We added a transformer architecture, both in python and javascript. You can see the transformer.py example to see how to train on text, or musictranscriptor.py to see how to train for transcription. 
+- We added the validation code to check visually the results of the learning in python.
+- We added code to check the whether or not a sound font can generate a note of specific height, which will allow us to generate more instruments soon.
+
 ## Requirements : 
 - Ubuntu (other OS will need some adaptation)
 
@@ -23,6 +28,7 @@ You will learn to generate synthetic datasets, train the models, export them for
 
 
 ## Installation :
+(optionnal but recommended if learning) Download the noise and place it in the specified folder (see the README there for more info).
 
 One virtual env for learning. (Install the needed pip dependencies listed in the file, depending on your machine choose either tensorflow or tensorflow-gpu)
 
@@ -45,13 +51,17 @@ python3 musicTranscriptor.py -ds pianoAllMonophonic10000.datasetconfig -mod conv
 To export the model :
 python3 musicTranscriptor.py -ds pianoAllMonophonic10000.datasetconfig -mod conv1.modelconfig -tr robust.trainingconfig -act e
 
+To validate the model :
+python3 musicTranscriptor.py -ds pianoAllMonophonic10000.datasetconfig -mod conv1.modelconfig -tr robust.trainingconfig -act v
+you can also specify a specific dataset config via -vds if you want to validate on a specific dataset, for example the training set to check for overfitting and compare generalization.
 
 ## Some Technical details to consider when designing your networks : 
 We are doing some real-time processing therefore it imposes restriction on the keras layers you can use so that everything works well.
 
-When doing filtering (i.e. using only data from the past) and not smoothing (waiting to have more data from the future before making a prediction), you can't use "SAME" or "VALID" convolutions if they have a kernel size greater than 1. You must use "CAUSAL" convolutions. You can use recurrent layers. You can't use normalization layers like BatchNorm or InstanceNorm, so I recommend using selu as a substitute.
+When doing filtering (i.e. using only data from the past) and not smoothing (waiting to have more data from the future before making a prediction), you can't use "SAME" or "VALID" convolutions if they have a kernel size greater than 1. You must use "CAUSAL" convolutions. You can use recurrent layers. You can use transformer architecture (like GPT-2). You can't use normalization layers like BatchNorm or InstanceNorm, so I recommend using selu or LayerNorm as a substitute.
 
-When doing smoothing (not yet implemented), you can use an architecture like U-Net segmentation to achieve state of the art.
+
+When doing smoothing (not yet implemented), you can use an architecture like U-Net segmentation to achieve state of the art, alternatively for state of the art you can also use a bidirectionnal transformer architecture (like BERT).
 
 If you run the network on audio extracted between two specific instants, for example the 5 second following the detection of "Hi Wisteria", then you can use "same" convolution and normalization layers.
 
