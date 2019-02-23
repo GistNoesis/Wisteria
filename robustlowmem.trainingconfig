@@ -1,0 +1,12 @@
+{
+  "noise":true,
+  "whiteNoise":true,
+  "distortion":true,
+  "volumeRandomization":true,
+  "micFrequencyResponse":true,
+  "nbEpoch":200,
+  "bs":32,
+  "initialLearningRate":1e-4,
+  "decayLearningRate1000":0.96,
+  "outputName":"robust"
+}
