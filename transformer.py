@@ -62,6 +62,11 @@ class LayerNorm(tf.keras.layers.Layer):
                                    shape=[int(input_shape[-1])] , initializer=tf.constant_initializer(0) )
         return input_shape
 
+    def get_config(self):
+        base_config = super(LayerNorm, self).get_config()
+        base_config['axis'] = self.axis
+        return base_config
+
     def call(self, x):
         epsilon = 1e-5
         u = tf.reduce_mean(x, axis=self.axis, keepdims=True)
@@ -73,24 +78,29 @@ class LayerNorm(tf.keras.layers.Layer):
 def positionEncodding( x,nbpast, d= 100 ):
     bs = tf.shape(x)[0]
     tdim = tf.shape(x)[1]
-    r1 = tf.cast(nbpast,dtype=tf.float32)+tf.range(tf.cast(tdim,tf.float32),dtype=tf.float32)
+    #nbpast = tf.reshape( nbpast[0,0],(1,))
+    offsetpast = tf.reshape( nbpast, (bs,1,1))
+    pos = tf.cast( offsetpast,dtype=tf.float32) + tf.reshape( tf.range(tf.cast(tdim,tf.float32),dtype=tf.float32),(1,tdim,1) )
     #r1 = tf.Print(r1,[r1],"r1",summarize=10000)
-    pos = tf.expand_dims(r1,axis=1)
-    r2 = tf.range(d,dtype=tf.float32)
-    featrange = tf.expand_dims( tf.math.pow( 10000.0, r2 / d),axis=0)
+    featrange = tf.reshape( tf.math.pow( 10000.0, tf.range(d,dtype=tf.float32) / d),(1,1,d))
 
     cos = tf.cos( pos / featrange )
     sin = tf.sin( pos / featrange )
-    return tf.tile( tf.expand_dims( tf.concat( [cos,sin], axis=1),axis=0),(bs,1,1))
+    #return tf.tile( tf.expand_dims( tf.concat( [cos,sin], axis=1),axis=0),(bs,1,1))
+    return tf.concat( [cos,sin],axis=2)
 
 class LayerPositionEmbedding(tf.keras.layers.Layer):
     def __init__(self, d):
         super(LayerPositionEmbedding, self).__init__()
         self.d = d
 
-    def build(self, input_shapes):
-        input_shape = input_shapes[0]
-        return (input_shape[0],input_shape[1],self.d)
+    #def build(self, input_shapes):
+    #    input_shape = input_shapes[0]
+    #    return (input_shape[0],input_shape[1],2*self.d)
+    def get_config(self):
+        base_config = super(LayerPositionEmbedding, self).get_config()
+        base_config['d'] = self.d
+        return base_config
 
     def call(self, x):
         return positionEncodding(x[0],x[1],self.d)
@@ -98,27 +108,35 @@ class LayerPositionEmbedding(tf.keras.layers.Layer):
 
 
 
-def attention_mask(nd, ns, *, dtype):
+def attention_mask(nd, ns, localAttention,*, dtype):
     """1's in the lower triangle, counting from the lower right corner.
     Same as tf.matrix_band_part(tf.ones([nd, ns]), -1, ns-nd), but doesn't produce garbage on TPUs.
     """
     i = tf.range(nd)[:,None]
     j = tf.range(ns)
     m = i >= j - ns + nd
+    #m = tf.Print(m, [m[0:20, 0:20]], "m", summarize=1000)
+    if( localAttention > 0):
+        oldm = i < j - ns + nd + localAttention
+        #oldm = tf.Print(oldm,[oldm[0:20,0:20]],"oldm",summarize=1000 )
+        m = tf.logical_and( m, oldm)
+        #m = tf.Print(m, [m[0:20, 0:20]], "finalm", summarize=1000)
+
+
     return tf.cast(m, dtype)
 
-def mask_attn_weights(w):
+def mask_attn_weights(w,localAttention):
     # w has shape [batch, heads, dst_sequence, src_sequence], where information flows from src to dst.
     nd = tf.shape(w)[2]
     ns = tf.shape(w)[3]
-    b = attention_mask(nd, ns, dtype=w.dtype)
+    b = attention_mask(nd, ns,localAttention, dtype=w.dtype)
     #b = tf.Print(b,[b[0:10,0:10]],"attention mask",summarize=10000)
 
     b = tf.reshape(b, [1, 1, nd, ns])
     w = w * b - tf.cast(1e10, w.dtype) * (1 - b)
     return w
 
-def selfMaskedAttention( q, k ,v ):
+def selfMaskedAttention( q, k ,v, localAttention ):
     #q shape : (bs,nbhead, tdim, keydim)
     #k shape : (bs,nbhead, tdim, keydim)
     #v shape : (bs,nbhead, tdim, valdim)
@@ -128,7 +146,7 @@ def selfMaskedAttention( q, k ,v ):
     w = tf.matmul(q, k, transpose_b=True)
     dimv = tf.shape(v)[-1]
     w = w * tf.rsqrt(tf.cast(dimv, w.dtype))
-    w = mask_attn_weights( w )
+    w = mask_attn_weights( w ,localAttention)
     #w = tf.Print(w, [tf.shape(w)],"shape w",summarize=10)
     sm = tf.nn.softmax( w )
 
@@ -161,11 +179,12 @@ def selfAttention( x , nbhead, kdim, vdim ):
 
 
 class LayerMaskedAttention(tf.keras.layers.Layer):
-    def __init__(self, nbhead, kdim, vdim):
+    def __init__(self, nbhead, kdim, vdim,localAttention):
         super(LayerMaskedAttention, self).__init__()
         self.nbhead = nbhead
         self.kdim = kdim
         self.vdim = vdim
+        self.localAttention = localAttention
 
     def build(self, input_shapes):
         input_shape = input_shapes[0]
@@ -175,11 +194,19 @@ class LayerMaskedAttention(tf.keras.layers.Layer):
         q = inputs[0]
         k = inputs[1]
         v = inputs[2]
-        out = selfMaskedAttention(q, k, v)
+        out = selfMaskedAttention(q, k, v,self.localAttention)
         bs = tf.shape(q)[0]
         tdim = tf.shape(q)[2]
         out = tf.reshape(out, (bs, tdim, self.nbhead * self.vdim))
         return out
+
+    def get_config(self):
+        base_config = super(LayerMaskedAttention, self).get_config()
+        base_config['nbhead'] = self.nbhead
+        base_config['kdim'] = self.kdim
+        base_config['vdim'] = self.vdim
+        base_config['localAttention'] = self.localAttention
+        return base_config
 
 class LayerSplitHead(tf.keras.layers.Layer):
     def __init__(self, nbhead, outdim ):
@@ -194,8 +221,14 @@ class LayerSplitHead(tf.keras.layers.Layer):
         out = tf.transpose(q, (0, 3, 1, 2))
         return out
 
+    def get_config(self):
+        base_config = super(LayerSplitHead, self).get_config()
+        base_config['nbhead'] = self.nbhead
+        base_config['outdim'] = self.outdim
+        return base_config
 
-def selfAttentionBlock( x,nbhead,kdim, vdim, pastk, pastv, presentKs, presentVs ):
+
+def selfAttentionBlock( x,nbhead,kdim, vdim,localAttention, pastk, pastv, presentKs, presentVs ):
     q = LayerSplitHead(nbhead, kdim) ( tf.keras.layers.Conv1D(kdim * nbhead, kernel_size=1, use_bias=False)(x))
     k = LayerSplitHead(nbhead, kdim) ( tf.keras.layers.Conv1D(kdim * nbhead, kernel_size=1, use_bias=False)(x))
     v = LayerSplitHead(nbhead, vdim) ( tf.keras.layers.Conv1D(vdim * nbhead, kernel_size=1, use_bias=False)(x))
@@ -203,23 +236,26 @@ def selfAttentionBlock( x,nbhead,kdim, vdim, pastk, pastv, presentKs, presentVs 
     presentKs.append(k)
     presentVs.append(v)
 
+    k = tf.keras.layers.Reshape( (nbhead,-1,kdim))(k)
+    v = tf.keras.layers.Reshape( (nbhead,-1,vdim))(v)
+
     k = tf.keras.layers.Concatenate(axis=2)([pastk,k])
     v = tf.keras.layers.Concatenate(axis=2)([pastv,v])
 
 
 
-    out = LayerMaskedAttention(nbhead,kdim,vdim)([q,k,v])
+    out = LayerMaskedAttention(nbhead,kdim,vdim,localAttention)([q,k,v])
     return out
 
 
-def transformerBlock( x, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
+def transformerBlock( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
     pastK = tf.keras.layers.Input( shape=(nbhead,None,kdim))
     pastV = tf.keras.layers.Input( shape=(nbhead,None,vdim))
 
     pastKs.append( pastK )
     pastVs.append( pastV )
 
-    att = selfAttentionBlock(x,nbhead,kdim,vdim,pastK,pastV,presentKs,presentVs)
+    att = selfAttentionBlock(x,nbhead,kdim,vdim,localAttention,pastK,pastV,presentKs,presentVs)
     h = tf.keras.layers.Add()([x,att])
     h0 = LayerNorm()(h)
     h1 = tf.keras.layers.Conv1D(vdim*nbhead, 1, activation=tf.keras.activations.selu)(h0)
@@ -228,16 +264,33 @@ def transformerBlock( x, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs
     h = LayerNorm()(h)
     return h
 
+#This code is just use for debug purpose to toggle or not some layers
+def transformerBlock2( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
+    pastK = tf.keras.layers.Input( shape=(nbhead,None,kdim))
+    pastV = tf.keras.layers.Input( shape=(nbhead,None,vdim))
+
+    pastKs.append( pastK )
+    pastVs.append( pastV )
+
+    #att = selfAttentionBlock(x,nbhead,kdim,vdim,localAttention,pastK,pastV,presentKs,presentVs)
+
+    h = tf.keras.layers.Add()([x,x])
+    h0 = LayerNorm()(h)
+    h1 = tf.keras.layers.Conv1D(vdim*nbhead, 1, activation=tf.keras.activations.selu)(h0)
+    h2 = tf.keras.layers.Conv1D(vdim * nbhead, 1, )(h1)
+    h = tf.keras.layers.Add()( [h0 , h2 ] )
+    #h = LayerNorm()(h)
+    return h
 
 
 
-def buildModel( layerSize,depth, vocSize, embSize, nbhead,kdim):
+def buildModel( layerSize,depth, vocSize, embSize, nbhead,kdim,localAttention):
     x = tf.keras.layers.Input( shape=(None,), dtype=tf.int32 )
     emb = tf.keras.layers.Embedding(vocSize, embSize)(x)
-    nbpast = tf.keras.layers.Input( batch_shape=(1,), dtype=tf.int32)
+    nbpast = tf.keras.layers.Input( shape=(1,), dtype=tf.int32)
 
     #add past length to position embedding
-    pos = LayerPositionEmbedding(layerSize / 2)([emb,nbpast])
+    pos = LayerPositionEmbedding(layerSize // 2)([emb,nbpast])
     h = tf.keras.layers.Add()([pos, emb])
 
     pastKs = []
@@ -246,7 +299,7 @@ def buildModel( layerSize,depth, vocSize, embSize, nbhead,kdim):
     presentVs = []
 
     for i in range(depth):
-        h = transformerBlock( h,nbhead,kdim, int(layerSize/nbhead),pastKs,pastVs,presentKs,presentVs)
+        h = transformerBlock( h,localAttention,nbhead,kdim, int(layerSize/nbhead),pastKs,pastVs,presentKs,presentVs)
 
     logit = tf.keras.layers.Conv1D(vocSize, 1)(h)
 
@@ -268,6 +321,7 @@ def demo():
     embSize = 100
     layerSize = 100
     depth = 6
+    localAttention = 0
 
     nbhead = 4
     kdim = 20
@@ -278,7 +332,7 @@ def demo():
     target = tf.concat([text, tf.zeros((tf.shape(text)[0], 1), dtype=tf.int32)], axis=1)
 
 
-    model = buildModel(layerSize,depth,vocSize,embSize,nbhead,kdim)
+    model = buildModel(layerSize,depth,vocSize,embSize,nbhead,kdim,localAttention)
 
     pks = []
     pvs = []
@@ -287,7 +341,7 @@ def demo():
         pks.append( tf.zeros((bs,nbhead,0,kdim)) )
         pvs.append( tf.zeros((bs,nbhead,0,vdim)) )
 
-    outputs = model( [shiftedText,tf.zeros((1,),dtype=tf.int32)] + pks + pvs )
+    outputs = model( [shiftedText,tf.zeros((bs,1),dtype=tf.int32)] + pks + pvs )
     logit = outputs[0]
 
     greedyPred = tf.argmax(logit, axis=-1)
@@ -300,7 +354,7 @@ def demo():
         pks.append(tf.placeholder(shape=(bs, nbhead, None, kdim) ,dtype=tf.float32) )
         pvs.append(tf.placeholder(shape=(bs, nbhead, None, vdim) ,dtype=tf.float32) )
 
-    nbpast = tf.placeholder(dtype=tf.int32,shape=(1,))
+    nbpast = tf.placeholder(shape=(bs,1),dtype=tf.int32)
 
     generator = model( [text,nbpast] + pks + pvs )
     flatlogit = tf.reshape( generator[0], (-1,vocSize))
@@ -366,7 +420,7 @@ def demo():
         feed_dict[text] = curText
         #else:
         #    feed_dict[text] = batch[0][:,(i-1):i]
-        feed_dict[nbpast] = np.array([i], dtype=np.int32)
+        feed_dict[nbpast] = i*np.ones((bs,1),dtype=np.int32)
         results = sess.run([generatorPred] + generator, feed_dict=feed_dict)
         # print( results[0])
         seqs.append(results[0])
@@ -397,6 +451,7 @@ def demo():
     #m = buildModel()
 
     #res = m(text)
+
 
 
 

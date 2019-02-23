@@ -4,9 +4,9 @@
   "distortion":true,
   "volumeRandomization":true,
   "micFrequencyResponse":true,
-  "nbEpoch":200,
-  "bs":32,
-  "initialLearningRate":1e-4,
+  "nbEpoch":4,
+  "bs":1,
+  "initialLearningRate":1e-5,
   "decayLearningRate1000":0.96,
-  "outputName":"robust"
+  "outputName":"robustlowmem"
 }

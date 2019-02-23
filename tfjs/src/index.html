@@ -2,10 +2,10 @@
 
 <head>
         <title> Wisteria GistNoesis</title>
-        <script src="vconsole.min.js"></script>
-<script>
-    window.vConsole = new window.VConsole();
-</script>
+        <script src="/vconsole.min.js"></script>
+        <script>
+                window.vConsole = new window.VConsole();
+        </script>
 </head>
 
 <body style="background-color:#C9A0DC;">
@@ -18,6 +18,8 @@
                                         <option value="randomPolyphonic_train_10000">Piano Polyphonic</option>
                                         <option value="randomMonophonic_train_10000_AllPianos-GRU_3_200_-robust"> GRU
                                                 Piano Monophonic</option>
+                                        <option value="randomPolyphonic_train_10000_AllPianos-transformer_3_100_10_-robust">Tranformer
+                                                Piano polyphonic</option>
                                 </select>
                         </div>
                         <div>
@@ -68,30 +70,38 @@
         </div>
         <br>
         <center>
-                        <video width="70%" controls>
-                                        <source src="Wisteria-FirstVideo.mp4" type="video/mp4">
-                                      Your browser does not support the video tag.
-                                      </video><br><br>
-                                      <a href="https://www.youtube.com/watch?v=gEyLM8ntymc" target="_blank"> If no sound in above video : View on YouTube</a><br><br></center>
+                <video width="70%" controls>
+                        <source src="/Wisteria-FirstVideo.mp4" type="video/mp4">
+                        Your browser does not support the video tag.
+                </video><br><br>
+                <a href="https://www.youtube.com/watch?v=gEyLM8ntymc" target="_blank"> If no sound in above video :
+                        View on YouTube</a><br><br></center>
         <div style="margin-left: 30%;width:40%;text-align: justify; background-color: white; padding: 20px;">
                 <h1>Wisteria GistNoesis : personal music tutor</h1><br>
                 <h2> What do I see? </h2><br>
-                <span> At the top there is the log-spectogram, which shows at which frequencies is the audio energy. </span><br><br>
+                <span> At the top there is the log-spectogram, which shows at which frequencies is the audio energy.
+                </span><br><br>
                 <span> At the bottom there is a piano roller computed by a neural network. </span><br><br>
-                <span> In the spectogram a single note correspond to multiple lines (the harmonics), the neural network has learned to identify the notes from the spectrogram. </span><br><br>
+                <span> In the spectogram a single note correspond to multiple lines (the harmonics), the neural network
+                        has learned to identify the notes from the spectrogram. </span><br><br>
                 <span> You can change the neural network to change the piano roller visualization. </span><br><br>
-                <span> You can change the tonality, (which will soon be inferred automatically), and it will change the color map. </span><br><br>
+                <span> You can change the tonality, (which will soon be inferred automatically), and it will change the
+                        color map. </span><br><br>
                 <h2> Helps you learn music by providing real-time semantic visualisations. </h2><br>
                 <span> You can see the brain of a bot which has spent multiple lifetimes listening to music. </span><br><br>
-                <span> By giving you real-time feedback, it helps you develop your musical hearing and see the musical motives. </span><br><br>
-                <span> It is often hard for the beginner to hear himself play, but now you can see how well you played. </span><br><br>
+                <span> By giving you real-time feedback, it helps you develop your musical hearing and see the musical
+                        motives. </span><br><br>
+                <span> It is often hard for the beginner to hear himself play, but now you can see how well you played.
+                </span><br><br>
                 <span> Through visual gamification, it will help you learn. </span><br>
                 <h2> Improve your play </h2><br>
-                <span> Whether you play the piano, the violin, the flute or any other instrument, it will bring you useful info. </span><br><br>
+                <span> Whether you play the piano, the violin, the flute or any other instrument, it will bring you
+                        useful info. </span><br><br>
                 <span> For the violin, it will show you when your notes have the right pitch. </span><br><br>
                 <span> For the flute, it will show you the various respiration artefacts. </span><br><br>
                 <span> For the piano, it will highlight the musical hierarchies. </span><br><br>
-                <span> It can monitor your errors, track your progress, adapt its way of teaching to suit you better. </span><br><br>
+                <span> It can monitor your errors, track your progress, adapt its way of teaching to suit you better.
+                </span><br><br>
                 <h2> Wisteria is powered by deep learning using tensorflow.js </h2><br><br>
                 <span> Deep-learning brings superhuman performance into the realm of everyday life. </span><br><br>
                 <span> It's state of the art. </span><br><br>
@@ -100,46 +110,67 @@
                 <span> Run on Chrome/Firefox/Edge, Ubuntu / Windows / Android / IOS. </span><br><br>
                 <span> Current performance on mobile devices will improve in the near future. </span><br><br>
                 <h2> Customizable </h2><br>
-                <span> Music can be seen and learned in a wide variety of ways, therefore a wide variety of visualisations will be available. </span><br><br>
-                <span> Absolute hearing (current visualization) vs relative hearing (coming soon) are one of the most known ways of listening. </span><br><br>
+                <span> Music can be seen and learned in a wide variety of ways, therefore a wide variety of
+                        visualisations will be available. </span><br><br>
+                <span> Absolute hearing (current visualization) vs relative hearing (coming soon) are one of the most
+                        known ways of listening. </span><br><br>
                 <span> Useful tool for teachers to help their students pinpoint their mistakes. </span><br><br>
-                <span> See the project on <a href="https://github.com/GistNoesis/Wisteria"> Wisteria GistNoesis github page</a> to develop your networks, or run locally. </span><br><br>
+                <span> See the project on <a href="https://github.com/GistNoesis/Wisteria"> Wisteria GistNoesis github
+                                page</a> to develop your networks, or run locally. </span><br><br>
                 <span> Customize your datasets to suit your needs. </span><br><br>
                 <h2> Privacy conscious </h2><br>
                 <span> Learning an instrument is an hard task, which takes time and effort. </span><br><br>
-                <span> It is exceedingly easy to manipulate your emotions, because as a teacher we are controlling the rewards. </span><br><br>
+                <span> It is exceedingly easy to manipulate your emotions, because as a teacher we are controlling the
+                        rewards. </span><br><br>
                 <span> We can monitor your state of mind, your personality by the way you play. </span><br><br>
                 <span> Because of all this, our source code is shared and can be run locally. </span><br><br>
                 <h2> Monetization </h2><br>
-                <span> Ads about instruments, or music lessons will have a high CTR (because of the time spent on page), and be valuable (because of the context). </span><br><br>
-                <span> For the time being, GistNoesis will rather take donations and spend time helping you to learn music than work on maximizing the cash value I can get out of your kids.  </span><br><br>
-                <span> As always with GistNoesis projects, once the grace period is over, if the project hasn't reached its objectives, it will disappear and the technology behind will be put towards more fruitful objectives.  </span><br><br>
-                <span> This art project is there to highlight that in AI, the biggest challenge isn't the technical side but the alignement of incentives. </span><br>
+                <span> Ads about instruments, or music lessons will have a high CTR (because of the time spent on
+                        page), and be valuable (because of the context). </span><br><br>
+                <span> For the time being, GistNoesis will rather take donations and spend time helping you to learn
+                        music than work on maximizing the cash value I can get out of your kids. </span><br><br>
+                <span> As always with GistNoesis projects, once the grace period is over, if the project hasn't reached
+                        its objectives, it will disappear and the technology behind will be put towards more fruitful
+                        objectives. </span><br><br>
+                <span> This art project is there to highlight that in AI, the biggest challenge isn't the technical
+                        side but the alignement of incentives. </span><br>
                 <h2> Technology </h2><br>
-                <span> The technology behind Wisteria is quite generic, and can be applied to a wide range of domain. </span><br>
+                <span> The technology behind Wisteria is quite generic, and can be applied to a wide range of domain.
+                </span><br>
                 <span> You can monitor your sleep, by detecting your respirations. </span><br>
                 <span> You can monitor the local fauna, by listening and identifying birds. </span><br>
                 <span> You can monitor suspicious noises in car engines. </span><br>
                 <span> You can do speech-recognition. </span><br>
                 <span> You can do voice identification. </span><br>
-                <span> You can build the future of offline advertising : Every morning you task humans to speak the right things to other humans, and have Wisteria validate the task completion and reward accordingly. </span><br>
+                <span> You can build the future of offline advertising : Every morning you task humans to speak the
+                        right things to other humans, and have Wisteria validate the task completion and reward
+                        accordingly. </span><br>
                 <h1> FAQ: </h1><br>
                 <h2> I don't see the same result as your video : </h2><br>
-                <span> Even though we randomize the microphone frequency response, it's likely that your microphone or recording settings are different than what the bot was trained on. Try a different microphone, or come back soon when we have better models.</span><br><br>
-                <span> Your piano might be tuned differently, come back soon we have solutions almost ready for this problem. </span><br><br>
-                <span> You are using a mobile device and the result is garbage then it's probably due to a combination of microphone and 16-bits precision computations. So come back soon, or try a different device. </span>
+                <span> Even though we randomize the microphone frequency response, it's likely that your microphone or
+                        recording settings are different than what the bot was trained on. Try a different microphone,
+                        or come back soon when we have better models.</span><br><br>
+                <span> Your piano might be tuned differently, come back soon we have solutions almost ready for this
+                        problem. </span><br><br>
+                <span> You are using a mobile device and the result is garbage then it's probably due to a combination
+                        of microphone and 16-bits precision computations. So come back soon, or try a different device.
+                </span>
                 <h2> It lags : </h2><br>
                 <span> Close some other tasks to liberate memory, and stop other cpu/gpu intensive tasks.</span><br>
                 <span> Memory usage shouldn't grow over time. </span><br>
-                <span> It usually needs some warm-up period after the loading of a new network to reach stable processing regime. </span><br>
+                <span> It usually needs some warm-up period after the loading of a new network to reach stable
+                        processing regime. </span><br>
                 <span> We might drop audio frames to stay in sync with real-time. </span><br>
                 <span> Use smaller and faster networks or a better computer.</span><br>
                 <h2> I'm not impressed by the performance : </h2><br>
                 <span> We have built the infrastructure and use the simplest models. </span><br>
                 <span> We are heavily constrained on the computation side. </span><br>
-                <span> We will stay behind (~one year) last research papers : our original know-how won't be published until equivalent ideas are, because certain ideas are widely applicable and shouldn't be wasted. </span><br><br>
+                <span> We will stay behind (~one year) last research papers : our original know-how won't be published
+                        until equivalent ideas are, because certain ideas are widely applicable and shouldn't be
+                        wasted. </span><br><br>
                 <h2> I'm impressed by the performance : </h2><br>
-                <span>Don't forget to check the <a href="https://github.com/GistNoesis/Wisteria"> Wisteria GistNoesis github page</a> for more technical details.</span></br></br></br>
+                <span>Don't forget to check the <a href="https://github.com/GistNoesis/Wisteria"> Wisteria GistNoesis
+                                github page</a> for more technical details.</span></br></br></br>
                 <span>You can find the donate button there, as this page doesn't load external resources.</span></br></br>
                 <span>You can contact us at gistnoesis@gmail.com </span></br></br>
                 <span>Thanks :)</span></br>

@@ -1,6 +1,7 @@
 {
-  "architecture": "GRU",
+  "architecture": "transformer",
   "depth": 3,
-  "layerSize": 200,
+  "layerSize": 100,
+  "causalWindow":10,
   "outputNameSuffix": ""
 }

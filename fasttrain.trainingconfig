@@ -5,6 +5,7 @@
   "volumeRandomization":true,
   "micFrequencyResponse":true,
   "nbEpoch":3,
+  "bs":2,
   "initialLearningRate":1e-4,
   "decayLearningRate1000":0.96,
   "outputName":"fasttrain"

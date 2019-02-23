@@ -17,6 +17,9 @@ from tensorflow import keras as K
 import glob
 import argparse
 import json
+import copy
+
+from  transformer import LayerPositionEmbedding,transformerBlock,transformerBlock2
 
 def stft(x, fftsize=1024, overlap=4):
     hop = int(fftsize / overlap)
@@ -98,6 +101,17 @@ def eventSequenceToPianoRoll( ticks_per_beat,evts):
         return np.stack(out,0)
     return None
 
+def generateSingleNoteMidi( filename, instrument, note):
+    mid = MidiFile()
+    track = MidiTrack()
+    mid.tracks.append(track)
+    mid.ticks_per_beat = 32
+    velocity = 70
+    track.append(Message('program_change', program=instrument, time=0))
+    track.append(MetaMessage('set_tempo', tempo=1000000, time=0))
+    track.append(Message('note_on', note=note, velocity=velocity, time=0))
+    track.append(Message('note_off', note=note, velocity=127, time=32))
+    mid.save(filename)
 
 def generateRandomMidi( filename, dsconfig ):
     nbbeats = 10
@@ -226,7 +240,11 @@ def getDatasetNameFromConfig( dsconfig ):
 
 def getModelNameFromConfig( modconfig ):
     suffix = "" if "outputNameSuffix" not in modconfig else modconfig["outputNameSuffix"]
-    return modconfig["architecture"] + "_" + str(modconfig["depth"]) +"_" + str( modconfig["layerSize"]) + "_" + suffix
+    out = modconfig["architecture"] + "_" + str(modconfig["depth"]) +"_" + str( modconfig["layerSize"])
+    if "causalWindow" in modconfig:
+        out += "_" + modconfig["causalWindow"]
+    out += "_" + suffix
+    return out
 
 def getTrainingNameFromConfig( trconfig ):
     return trconfig["outputName"]
@@ -237,6 +255,30 @@ def getModelStringName( dsconfig,modconfig, trconfig ):
     trainingstringname = getTrainingNameFromConfig(trconfig)
     modelstringname = dsstringname + "-" + getModelNameFromConfig(modconfig) + "-" + trainingstringname
     return modelstringname
+
+#This function is used to detect automatically the valid range of your sound font,
+#It does so by trying to play a note, and checked if sound has been rendered
+#You can use the provided json unless you use other soundfonts
+def buildDatasetNoteRange():
+    noteRange = {}
+    for i in range(128):
+        noteRange[i] = []
+        dir = "instrument_" + str(i)
+        make_dir("datasets/noterange/" + dir)
+        for n in range(128):
+            filename = "datasets/noterange/"+dir+"/note_"+ str(n)
+            generateSingleNoteMidi( filename + ".mid",i,n)
+            call(["fluidsynth", "-r", "16000", "-F", filename +".wav", "/usr/share/sounds/sf2/FluidR3_GM.sf2",
+                  filename +".mid"])
+            data = read_wav_file( filename+".wav")
+            avg = np.std(data)
+            print("instrument "+ str(i) + " note " + str(n) + " avg : " + str(avg))
+            if( avg > 1e-4):
+                noteRange[i].append(n)
+    import json
+    with open('validNotesByInstr.json', 'w') as f:
+        json.dump(noteRange, f, ensure_ascii=False)
+
 
 
 def buildDatasetIfNotExist( dsconfig):
@@ -475,6 +517,8 @@ def buildModel( modconfig ):
         return modelConv1( modconfig["depth"],modconfig["layerSize"])
     if( modconfig["architecture"] == "GRU"):
         return modelGRU( modconfig["depth"],modconfig["layerSize"] )
+    if (modconfig["architecture"] == "transformer"):
+        return modelTransformer(modconfig["depth"], modconfig["layerSize"],modconfig["causalWindow"])
     raise Exception("architecture not recognized")
 
 
@@ -484,6 +528,85 @@ def GruCollect( x, size, initialStates,outStates):
     initialStates.append( initialState )
     outStates.append(outState)
     return out
+
+
+def modelTransformer( depth,layerSize,localAttention):
+    kernelSize = 1
+    nbhead = 4
+    kdim = 20
+    outSize = 128
+    logspecter = tf.keras.Input(shape=(None, 513), dtype=tf.float32, name='logspectrum')
+    h = tf.keras.layers.Conv1D(layerSize, kernelSize)(logspecter)
+    nbpast = tf.keras.layers.Input(shape=(1,), dtype=tf.int32)
+
+    # add past length to position embedding
+    pos = LayerPositionEmbedding( int( layerSize // 2))([h, nbpast])
+    h = tf.keras.layers.Add()([pos, h])
+
+    pastKs = []
+    pastVs = []
+    presentKs = []
+    presentVs = []
+
+
+    for i in range(depth):
+        h = transformerBlock(h,localAttention, nbhead, kdim, int(layerSize // nbhead), pastKs, pastVs, presentKs, presentVs)
+
+
+    logit = tf.keras.layers.Conv1D(outSize, 1)(h)
+
+    model = tf.keras.Model(inputs=[logspecter, nbpast] + pastKs + pastVs, outputs=[logit] + presentKs + presentVs)
+    return model
+
+
+#Following code was used to debug the export/import of layers between python and js, simplifying the model and adding layers progressively while maintaining working import/export
+def testExportTransformer():
+    modelstringname = "testTransformer"
+    g2 = tf.Graph()
+    with g2.as_default():
+        with  tf.Session() as sess:
+            layerSize = 100
+            kernelSize = 1
+            nbhead = 4
+            kdim = 20
+            outSize = 128
+            depth = 1
+
+            logspecter = tf.keras.Input(shape=(None, 513), dtype=tf.float32, name='logspectrum')
+            h = tf.keras.layers.Conv1D(layerSize, kernelSize)(logspecter)
+            nbpast = tf.keras.layers.Input(batch_shape=(1,), dtype=tf.int32, name="nbpast")
+            # add past length to position embedding
+            pos = LayerPositionEmbedding(layerSize // 2)([h, nbpast])
+            # following reshape necessary for tfjs export to work correctly
+            rshppos = tf.keras.layers.Reshape((-1,layerSize))(pos)
+            h = tf.keras.layers.Add()([rshppos, h])
+
+            inputs = [logspecter, nbpast]
+
+
+            pastKs = []
+            pastVs = []
+            presentKs = []
+            presentVs = []
+
+            for i in range(depth):
+                h = transformerBlock(h,layerSize, nbhead, kdim, int(layerSize / nbhead), pastKs, pastVs, presentKs, presentVs)
+            
+            inputs = inputs + pastKs + pastVs
+
+
+            model = tf.keras.Model(inputs= inputs , outputs=[h])
+
+            sess.run( tf.global_variables_initializer())
+            import tensorflowjs as tfjs
+            path = "tfjs/dist/" + modelstringname
+            make_dir(path)
+            tfjs.converters.save_keras_model(model, path)
+
+
+
+
+
 
 def modelGRU( depth,layerSize):
     outSize = 128
@@ -548,7 +671,7 @@ def learn( dsconfig, modconfig, trconfig):
 
     g1 = tf.Graph()
     with g1.as_default():
-        bs = 32
+        bs = trconfig["bs"]
         itr = make_iterator(bs,dsstringname)
         data = itr.get_next()
 
@@ -611,11 +734,22 @@ def learn( dsconfig, modconfig, trconfig):
         model = buildModel( modconfig )
 
         modelInputs = [logpower]
+        if (modconfig["architecture"] == "GRU"):
+            for i in range(len(model.inputs)-1):
+                inp = model.inputs[i+1]
+                shape = (bs,) + tuple( inp.shape[1:] )
+                modelInputs.append( tf.zeros( shape, dtype=inp.dtype))
+        elif (modconfig["architecture"] == "transformer"):
+            #modelInputs.append( tf.zeros((bs,1),dtype=tf.int32) )
+            modelInputs.append(tf.random.uniform((bs, 1),minval=0,maxval=10000, dtype=tf.int32))
+            #a causal Window of size 10, use exactly 10 times, so the first present need only 9 pasts, hence the minus one.
+            #the edge case localAttention = 0, mean that we will use all pasts, which here in learning mean 0
+            localAttention = max( modconfig["causalWindow"] - 1,0)
+            for i in range( len(model.inputs)-2):
+                inp = model.inputs[i + 2]
+                shape = (bs, inp.shape[1],localAttention,inp.shape[3])
+                modelInputs.append(tf.zeros(shape, dtype=inp.dtype))
 
-        for i in range(len(model.inputs)-1):
-            inp = model.inputs[i+1]
-            shape = (bs,) + tuple( inp.shape[1:] )
-            modelInputs.append( tf.zeros( shape, dtype=inp.dtype))
 
         modelOutputs = model(modelInputs)
 
@@ -685,46 +819,126 @@ def learn( dsconfig, modconfig, trconfig):
         print( elapsed_time )
 
 
-def validate(name, type, nbex):
-    stringname = getStringName(name, type, nbex)
-    g3 = tf.Graph()
-    with g3.as_default():
+def validate( trainingdsconfig,validatedsconfig, modconfig, trconfig):
+    debug = False
+
+    dsstringname = getDatasetNameFromConfig(validatedsconfig)
+    modelstringname = getModelStringName(trainingdsconfig,modconfig,trconfig)
+
+    g1 = tf.Graph()
+    with g1.as_default():
         bs = 1
-        itr = make_iterator(bs,stringname)
+        itr = make_iterator(bs,dsstringname)
         data = itr.get_next()
 
-        lr = 1e-4
 
         X = tf.placeholder(shape=(bs, None), dtype=tf.float32)
-        target = tf.placeholder(shape=(bs, None, 128), dtype=tf.float32)
-        istraining = tf.placeholder(dtype=tf.bool, shape=())
+        target = tf.placeholder(shape=(bs, None,128), dtype=tf.float32)
+        istraining = tf.placeholder(dtype=tf.bool,shape=())
+
+        if( trconfig["noise"] is True):
+            noise_itr = make_noise_iterator(bs, 160000)
+            noisedata = noise_itr.get_next()
+            X = X + tf.random.uniform((bs,1),0.0,4.0) * noisedata
+
+        if( trconfig["volumeRandomization"] is True):
+            volgain = 0.1+tf.random.uniform((bs,1),0,2)
+            X = X*volgain
+
+        if( trconfig["whiteNoise"] is True):
+            varnoise = 0.1*tf.random.normal( tf.shape(X) )
+            noise = tf.random.normal( tf.shape(X) )*varnoise*varnoise
+            X = X + noise
+
 
         fft = spectogram(X)
-        power = tf.real(fft * tf.math.conj(fft))
+        power = tf.real( fft*tf.math.conj(fft) )
+        power = tf.reshape(power,(bs,-1,513))
 
-        power = tf.reshape(power, (bs, -1, 513))
+        if (trconfig["distortion"] is True):
+            distort = 1 + tf.random.normal( tf.shape(power), )*0.05
+            power = distort * power
+
+        #cutofffreq = tf.random.uniform((bs,1,1),minval=100,maxval=400)
+
+        #micFrequencyResponse = tf.random.uniform((bs,1,1),-10,0) + tf.cumsum( tf.random.normal((bs,1,513))*0.05, axis=1 )
+
+
+
+        #attenuate = 1 / (1 + tf.pow(tf.reshape(tf.range(0,513,dtype=tf.float32), (1, 1, 513))/cutofffreq, tf.random.uniform((bs,1,1 ),0.0, 2.0) )  )
+        #power = attenuate * power
+
+        #power = tf.Print( power ,[tf.reduce_mean( power )],"power :" )
+        #pinknoise =  tf.random.normal( (bs,tf.shape(power)[1],513) ) *  1.0 /( 1+tf.reshape( tf.range(0,513,dtype=tf.float32),(1,1,513) ) )
+        #power = power + tf.random.uniform((bs,1,1), 0,1e-8) * pinknoise
+
         eps = 1e-10
-        logpower = tf.log(eps + power)
+        logpower = tf.log(eps+power)
+
+        if trconfig["micFrequencyResponse"] is True:
+            nbcp = 10
+            micFRCP = tf.random.uniform((bs, 1, nbcp), -10.0, 1)
+            micFrequencyResponse = QTransform(micFRCP, (nbcp - 1.01) * tf.range(513, dtype=tf.float32) / 512.0)
+            logpower = logpower + micFrequencyResponse
+
 
         logpower = preprocesslp(logpower)
 
+        model = buildModel( modconfig )
 
-        model = buildModel()
-        logit = model(logpower)
+        modelInputs = [logpower]
+        if (modconfig["architecture"] == "GRU"):
+            for i in range(len(model.inputs)-1):
+                inp = model.inputs[i+1]
+                shape = (bs,) + tuple( inp.shape[1:] )
+                modelInputs.append( tf.zeros( shape, dtype=inp.dtype))
+        elif (modconfig["architecture"] == "transformer"):
+            #modelInputs.append( tf.zeros((bs,1),dtype=tf.int32) )
+            modelInputs.append(tf.random.uniform((bs, 1),minval=0,maxval=10000, dtype=tf.int32))
+
+            # a causal Window of size 10, use exactly 10 times, so the first present need only 9 pasts, hence the minus one.
+            # the edge case localAttention = 0, mean that we will use all pasts, which here in learning mean 0
+            localAttention = max(modconfig["causalWindow"] - 1, 0)
+            for i in range( len(model.inputs)-2):
+                inp = model.inputs[i + 2]
+                shape = (bs, inp.shape[1],localAttention,inp.shape[3])
+                modelInputs.append(tf.zeros(shape, dtype=inp.dtype))
+
+
+        modelOutputs = model(modelInputs)
+
+
+        if( isinstance(modelOutputs,list)):
+            logit = modelOutputs[0]
+        else:
+            logit = modelOutputs
 
         pred = tf.nn.sigmoid(logit)
+
         tdim = tf.shape(logit)[1]
         targ = target[:, 0:tdim, :]
 
-        loss = tf.reduce_mean( tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(tf.greater_equal(targ, eps), tf.float32),
-                                                           logits=logit) )
+        eps = 1e-5
+        #loss = tf.losses.mean_squared_error(targ,pred)
+        loss =  tf.reduce_mean( tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.cast(tf.greater_equal(targ,eps), tf.float32),logits=logit ))
 
-        #saver = tf.train.Saver(tf.global_variables(scope="model"))
 
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
-            #saver.restore(sess, "datasets/model2.ckpt")
-            model.load_weights("datasets/model.weights")
+            model.load_weights("datasets/fw-" + modelstringname + ".weights")
+
+            if( debug ):
+                #We use this code to check that the network computations give the same results in python and javascript
+                #It will later be in some test case later, but the code is not crystallized yet so to limit duplication of code it's here for now
+                if( modconfig["architecture"] == "transformer"):
+                    modelInputs[0] = tf.ones((bs, 3, 513), dtype=tf.float32)
+                    modelInputs[1] = tf.zeros((bs,1),dtype=tf.int32)
+                    modOutputsDebug = model(modelInputs)
+                    _modOutputs2 = sess.run( modOutputsDebug )
+                    print(_modOutputs2)
+                    input()
+
+
             start_time = time.time()
             # your code
 
@@ -737,30 +951,27 @@ def validate(name, type, nbex):
                     try:
                         print("epoch : " + str(i))
                         print("batch " + str(co))
-                        m, p, w = sess.run(data)
+                        m,p,w = sess.run(data)
 
-                        # sp = sess.run( fft,feed_dict={X:w[:,:,0]} )
-                        _loss,_pred = sess.run([ loss,pred], feed_dict={X: w[:, :, 0], target: p, istraining: True})
-                        print("loss : " + str(_loss))
-                        # print( sp.shape)
-                        # print( pianoroll.shape)
+                        #sp = sess.run( fft,feed_dict={X:w[:,:,0]} )
+                        _loss,_pred = sess.run( [loss,pred],feed_dict={X:w[:,:,0], target:p} )
+                        print("loss : " + str(_loss) )
+
                         plt.figure(0)
-                        plt.imshow(np.transpose( (p[0] > 1e-5).astype(np.float32) ,(1,0)) ,origin='lower', vmin=0.0,vmax=1.0, aspect=10)
+                        plt.imshow(np.transpose((p[0] > 1e-5).astype(np.float32), (1, 0)), origin='lower', vmin=0.0,
+                                   vmax=1.0, aspect=10)
 
                         plt.figure(1)
-                        plt.imshow(np.transpose( _pred[0], (1, 0)), origin='lower', vmin=0.0, vmax=1.0,aspect=10)
+                        plt.imshow(np.transpose(_pred[0], (1, 0)), origin='lower', vmin=0.0, vmax=1.0, aspect=10)
                         plt.show()
-                        # print(name)
-                        # print( np.sum(img))
-                        co = co + 1
+                        co = co+1
 
                     except tf.errors.OutOfRangeError:
                         break
 
         elapsed_time = time.time() - start_time
-        print("Training time : ")
-        print(elapsed_time)
-
+        print("validate time : ")
+        print( elapsed_time )
 
 
 
@@ -879,7 +1090,7 @@ def exportModel( dsconfig, modconfig,trconfig ):
             model = buildModel(modconfig)
             model.load_weights("datasets/fw-"+modelstringname+".weights")
             import tensorflowjs as tfjs
-            path = "tfjs/models/"+modelstringname
+            path = "tfjs/dist/"+modelstringname
             make_dir(path)
             tfjs.converters.save_keras_model(model,path)
 
@@ -903,17 +1114,22 @@ def loadJsonFile( path ):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-ds", help="dataset config file")
+    parser.add_argument("-vds", help="validate dataset config file")
     parser.add_argument("-mod", help="model config file")
     parser.add_argument("-tr", help="training config file")
     parser.add_argument("-act", help="l to learn, v to validate, e to export")
     args = parser.parse_args()
 
     dsconfig = None
+    vdsconfig = None
     modconfig = None
     trconfig = None
 
     if( args.ds is not None):
         dsconfig = loadJsonFile(args.ds)
+
+    if (args.vds is not None):
+        vdsconfig = loadJsonFile(args.vds)
 
     if (args.mod is not None):
         modconfig = loadJsonFile(args.mod)
@@ -923,10 +1139,13 @@ if __name__=="__main__":
 
     print("Dataset config :")
     print( dsconfig)
+    print("validate Dataset config :")
+    print( vdsconfig)
     print("Model config :")
     print( modconfig)
     print("Training config :")
     print( trconfig)
+
 
     if( args.act == "l"):
         buildDatasetIfNotExist( dsconfig)
@@ -934,34 +1153,16 @@ if __name__=="__main__":
         learn( dsconfig,modconfig,trconfig)
     if( args.act == "e"):
         exportModel(dsconfig,modconfig,trconfig)
-
-    '''
-    if( args.act == "l"):
-        buildDatasetIfNotExist(args.dsname,args.dstype,args.dsnbex)
+    if( args.act == "v"):
+        #unless explicitly specified by vdsconfig, we will create a distinct dataset so by design we limit the risk of validating on the training set
+        if( vdsconfig is None):
+            vdsconfig = copy.deepcopy(dsconfig)
+            vdsconfig["type"] = "validate"
+            vdsconfig["nbex"] = 100
+        buildDatasetIfNotExist(vdsconfig)
         buildNoiseDatasetIfNotExist()
-        learn(args.dsname,args.dstype,args.dsnbex)
-    elif( args.act == "v"):
-        buildDatasetIfNotExist(args.dsname, args.dstype, args.dsnbex)
-        validate(args.dsname,args.dstype,args.dsnbex)
-    elif( args.act == "e"):
-        modelname = getStringName(args.dsname,args.dstype,args.dsnbex)
-        exportModel(modelname)
-    '''
-    '''
-    buildDatasetIfNotExist()
-    buildNoiseDatasetIfNotExist()
-    if( len(sys.argv) > 1 and sys.argv[1]=="l"):
-        learn()
-    elif (len(sys.argv) > 1 and sys.argv[1] == "n"):
-        testIterateNoise()
-    elif (len(sys.argv) > 1 and sys.argv[1] == "v"):
-        validate()
-    elif (len(sys.argv) ==2 and sys.argv[1] == "e"):
-        print("usage : musicTranscriptor e output")
-    elif (len(sys.argv) > 2 and sys.argv[1] == "e"):
-        exportModel(sys.argv[2])
-    elif (len(sys.argv) > 1 and sys.argv[1] == "g"):
-        generateRandomMidiSuperposition("randomMidiSuperposition.mid")
-    #else:
-    #    demorecord()
-    '''
+        validate(dsconfig,vdsconfig,modconfig,trconfig)
+
+    if( args.act == "t"):
+        testExportTransformer()
+
