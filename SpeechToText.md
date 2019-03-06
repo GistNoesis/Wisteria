@@ -1,6 +1,8 @@
 Here, I'll explain the design choices, regarding the speech to text, i.e. (voicetranscriptor.py)
 
 We use mozilla commons voice dataset.
+You need to download and extract it inside "datasets/commonvoice/" 
+After extraction you should have a folder "datasets/commonvoice/fr" if you downloaded the french language.
 
 One of our main constraint is the doing the processing real-time.
 This mean that we need to use a ctc loss (or provide alignment), so here we choose to do ctc loss in the deep speech style, but using a transformer architecture in place of the convolutions.
