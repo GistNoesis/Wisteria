@@ -242,7 +242,7 @@ def getModelNameFromConfig( modconfig ):
     suffix = "" if "outputNameSuffix" not in modconfig else modconfig["outputNameSuffix"]
     out = modconfig["architecture"] + "_" + str(modconfig["depth"]) +"_" + str( modconfig["layerSize"])
     if "causalWindow" in modconfig:
-        out += "_" + modconfig["causalWindow"]
+        out += "_" + str( modconfig["causalWindow"] )
     out += "_" + suffix
     return out
 
@@ -367,8 +367,7 @@ def make_iterator(bs,stringname):
         pianoroll = tf.reshape( pianoroll,(-1,128)) / 127.0
 
         pathwav = tf.strings.join(["datasets/", wavfile_path])
-        wavfile = tf.py_func(read_wav_file,[pathwav],[tf.float32])
-        wavfile = tf.squeeze(wavfile,axis=0)
+        wavfile = tf.py_func(read_wav_file,[pathwav],tf.float32)
         #wavfile = tf.Print(wavfile,[tf.shape(wavfile)],"tfshapewavfile",summarize=5)
         #img = tf.io.decode_raw( parsed_features["image_data"],tf.float32 )
 

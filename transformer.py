@@ -48,7 +48,15 @@ def buildDatasetRepeatWordSequenceInReverseUnsupervised(size=60000,nbWords = 5,v
 
 
 
+class LayerGelu(tf.keras.layers.Layer):
+    def __init__(self, axis=-1):
+        super(LayerGelu, self).__init__()
 
+    def build(self, input_shape):
+        return input_shape
+
+    def call(self, x):
+        return gelu(x)
 
 class LayerNorm(tf.keras.layers.Layer):
     def __init__(self, axis=-1):
@@ -247,7 +255,10 @@ def selfAttentionBlock( x,nbhead,kdim, vdim,localAttention, pastk, pastv, presen
     out = LayerMaskedAttention(nbhead,kdim,vdim,localAttention)([q,k,v])
     return out
 
+def gelu(x):
+    return 0.5*x*(1+tf.tanh(np.sqrt(2/np.pi)*(x+0.044715*tf.pow(x, 3))))
 
+#We currently use selu instead of gelu, because selu is already defined in keras whereas gelu isn't yet
 def transformerBlock( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
     pastK = tf.keras.layers.Input( shape=(nbhead,None,kdim))
     pastV = tf.keras.layers.Input( shape=(nbhead,None,vdim))
@@ -259,10 +270,27 @@ def transformerBlock( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, prese
     h = tf.keras.layers.Add()([x,att])
     h0 = LayerNorm()(h)
     h1 = tf.keras.layers.Conv1D(vdim*nbhead, 1, activation=tf.keras.activations.selu)(h0)
-    h2 = tf.keras.layers.Conv1D(vdim * nbhead, 1, )(h1)
+    h2 = tf.keras.layers.Conv1D(vdim * nbhead, 1 )(h1)
     h = tf.keras.layers.Add()( [h0 , h2 ] )
     h = LayerNorm()(h)
     return h
+
+def transformerBlockGelu( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
+    pastK = tf.keras.layers.Input( shape=(nbhead,None,kdim))
+    pastV = tf.keras.layers.Input( shape=(nbhead,None,vdim))
+
+    pastKs.append( pastK )
+    pastVs.append( pastV )
+
+    att = selfAttentionBlock(x,nbhead,kdim,vdim,localAttention,pastK,pastV,presentKs,presentVs)
+    h = tf.keras.layers.Add()([x,att])
+    h0 = LayerNorm()(h)
+    h1 = LayerGelu()( tf.keras.layers.Conv1D(vdim*nbhead, 1)(h0))
+    h2 = tf.keras.layers.Conv1D(vdim * nbhead, 1 )(h1)
+    h = tf.keras.layers.Add()( [h0 , h2 ] )
+    h = LayerNorm()(h)
+    return h
+
 
 #This code is just use for debug purpose to toggle or not some layers
 def transformerBlock2( x,localAttention, nbhead,kdim, vdim , pastKs,pastVs, presentKs, presentVs ):
